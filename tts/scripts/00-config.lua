@@ -115,7 +115,8 @@ GUID = {
     zone_hidden    = { ragno='aa0021', orca='aa0022', colibri='aa0023', condor='aa0024' },
     card_elnino    = 'aa0027',
     score_track    = 'aa0032',
-    score_markers  = { ragno='aa0033', orca='aa0034', colibri='aa0035', condor='aa0036' },
+    -- score_markers: aa0033-aa0036 riservati (i segnalini sono gestiti
+    --  dinamicamente via scoreMarkers{} in 09-components.lua)
     -- deck_geoglifi / deck_obiettivi / valley_boards: oggetti facoltativi (aggiungere al template se necessario)
 }
 

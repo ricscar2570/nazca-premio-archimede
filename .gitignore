@@ -1,0 +1,21 @@
+# Build output — generati da GitHub Actions, non committare
+build/output/
+output/
+
+# Node.js
+node_modules/
+npm-debug.log*
+package-lock.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# TTS output locale (il JSON finale viene pubblicato come Release)
+# tts/assets/*.png  ← COMMITTATI intenzionalmente (servono via GitHub raw URL)

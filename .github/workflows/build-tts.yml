@@ -219,7 +219,7 @@ jobs:
             - **L'immagine della plancia** deve essere configurata manualmente (vedi Passo 3)
             - **Le carte geoglifo** non sono ancora collegate automaticamente ai percorsi — usa `!geoglifo` per impostare i percorsi manualmente a inizio partita
             - **La cordicella** è rappresentata da Vector Lines disegnate automaticamente quando si piazza un chiodino — non è un oggetto fisico separato
-            - **I campi a valle** sono gestiti solo via stato Lua (nessuna tessera fisica fuori dalla plancia in questa versione)
+            - **Tessere campo e colture** sono oggetti fisici TTS spawnati automaticamente dopo `!versante`; la traccia punteggio è un Custom_Board separato
 
             ---
 

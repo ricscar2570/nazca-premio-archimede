@@ -89,9 +89,7 @@ if (board) {
     console.warn('  WARNING: Board object (aa0001) not found in template');
 }
 
-// ─── 4. Generate assets (moved before write) ───────────────
-// (asset generation happens below, then re-injects into template.LuaScript)
-// ─── 5. Write output (after asset URL injection) ─────────────
+// ─── 4. Genera asset PNG + inietta URL nel Lua ──────────────
 
 // ─── GENERA ASSET PNG ────────────────────────────────────────
 // Crea PNG 256×256 a colore piatto + label in testo usando solo

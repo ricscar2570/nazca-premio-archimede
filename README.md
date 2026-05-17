@@ -2,148 +2,163 @@
 
 > *Le linee che cercano l'acqua / The lines that seek water*
 
-Automated build pipeline for the **NAZCA** board game manual.  
-Write in Markdown → GitHub Actions builds DOCX + PDF in multiple languages.
+Pipeline automatizzata per il manuale del gioco **NAZCA** (Premio Archimede 2027, Trofeo QP).  
+Scrivi in Markdown → GitHub Actions produce DOCX + PDF (Game Bible) e il mod TTS.
 
 ---
 
-## Repository structure
+## Struttura del repository
 
 ```
 nazca-gamebible/
-├── .github/workflows/build-manual.yml   ← CI/CD pipeline
+├── .github/workflows/
+│   ├── build-manual.yml   ← CI/CD Game Bible (Markdown → DOCX → PDF)
+│   └── build-tts.yml      ← CI/CD mod Tabletop Simulator
+│
 ├── content/
-│   ├── it/          ← Italian source (complete)
-│   │   ├── meta.yml               ← document metadata
-│   │   ├── 01-ambientazione.md
-│   │   ├── 02-componenti.md
-│   │   ├── 03-setup.md
-│   │   ├── 04-turno.md
-│   │   ├── 05-azioni.md
-│   │   ├── 06-clan.md
-│   │   ├── 07-acqua.md
-│   │   ├── 08-valle.md
-│   │   ├── 09-el-nino.md
-│   │   ├── 10-obiettivi.md
-│   │   ├── 11-rivelazione.md
-│   │   └── 12-punteggio.md
-│   └── en/          ← English (stubs — translate and fill)
+│   ├── it/                ← Sorgente italiano (completo, 19 parti)
+│   │   ├── meta.yml                ← metadati documento
+│   │   ├── 01-ambientazione.md … 19-storico.md
+│   └── en/                ← Inglese (completo, 19 parti)
 │       ├── meta.yml
-│       └── 01-setting.md … 12-scoring.md
-└── build/
-    ├── package.json
-    ├── index.js      ← main build script
-    ├── parser.js     ← Markdown → AST
-    ├── renderer.js   ← AST → DOCX elements
-    └── styles.js     ← NAZCA colour / style constants
+│       └── 01-setting.md … 19-history.md
+│
+├── build/                 ← Build pipeline Game Bible (Node.js)
+│   ├── package.json
+│   ├── index.js           ← script principale
+│   ├── parser.js          ← Markdown → AST
+│   ├── renderer.js        ← AST → elementi DOCX
+│   ├── styles.js          ← palette NAZCA + costanti stile
+│   └── output/            ← generato localmente (ignorato da git)
+│
+└── tts/                   ← Tabletop Simulator mod
+    ├── build/
+    │   └── bundle.js      ← assembla Lua → TTS JSON + genera PNG asset
+    ├── scripts/           ← sorgente Lua (8 file, bundled da bundle.js)
+    │   ├── 00-config.lua          costanti: griglia 20×27, sorgenti, colori
+    │   ├── 01-state.lua           stato di gioco e turni
+    │   ├── 02-grid.lua            BFS connettività, adiacenza 8-dir
+    │   ├── 03-actions.lua         8 azioni (Traccia, Puquio, Irriga, Semina…)
+    │   ├── 04-clans.lua           poteri clan (Ragno, Orca, Colibrì, Condor)
+    │   ├── 05-scoring.lua         punteggio finale
+    │   ├── 06-07-08-…lua          Rivelazione, UI, entry points TTS
+    │   └── 09-components.lua      tessere campo, colture, traccia punteggio
+    ├── template/
+    │   ├── save.json       ← template TTS (25 oggetti pre-configurati)
+    │   └── README.md       ← istruzioni immagine plancia
+    └── assets/             ← PNG generati da bundle.js (committati per GitHub raw URL)
+        └── *.png           ← 15 immagini: campi, colture, traccia
 ```
 
 ---
 
-## Build locally
+## Build Game Bible — localmente
 
 ```bash
-# Install dependencies
-cd build && npm install
+cd build
+npm install
 
-# Build Italian PDF (requires LibreOffice for PDF step)
+# Italiano
 node index.js --lang it --out ../output/
 libreoffice --headless --convert-to pdf --outdir ../output/ ../output/NAZCA_GameBible_it.docx
 
-# Build both languages
+# Entrambe le lingue
 npm run build:all
 ```
 
 ---
 
+## Build mod TTS — localmente
+
+```bash
+# Nessuna dipendenza npm (solo Node.js built-in)
+REPO_URL=https://raw.githubusercontent.com/TUO_USER/TUO_REPO/main \
+  node tts/build/bundle.js --out output/
+```
+
+Il file `output/NAZCA_TTS_v8.json` si carica direttamente in TTS:  
+**Games → Save & Load → seleziona il file**.
+
+---
+
 ## CI/CD — GitHub Actions
 
-Every push to `main` that touches `content/` or `build/` automatically:
+### Game Bible (`build-manual.yml`)
+Si attiva ad ogni push su `content/**` o `build/**`:
+1. Build DOCX per IT e EN
+2. Conversione PDF via LibreOffice
+3. Upload artefatti (30 giorni)
+4. Crea GitHub Release con tutti i file
 
-1. Builds DOCX for all languages
-2. Converts to PDF via LibreOffice
-3. Uploads artifacts (available for 30 days under **Actions → run → Artifacts**)
-4. Creates a GitHub Release with all output files
+### Mod TTS (`build-tts.yml`)
+Si attiva ad ogni push su `tts/**`:
+1. Bundle degli 8 script Lua → script globale TTS
+2. Generazione 540 snap points (griglia 20×27)
+3. Generazione 15 PNG asset (campi, colture, traccia punteggio)
+4. Iniezione URL asset e immagine plancia nel JSON
+5. Verifica automatica (snap count, dimensione Lua)
+6. Upload artefatti + GitHub Release
 
-To trigger manually: **Actions → Build Game Bible → Run workflow**.
+**Variabili repository da configurare** (`Settings → Variables → Actions`):
+- `BOARD_IMAGE_URL` — URL dell'immagine plancia (opzionale; altrimenti usa il default GitHub raw)
 
 ---
 
-## Markdown syntax guide
-
-### Standard elements
+## Sintassi Markdown estesa
 
 ```markdown
-# PARTE I — Title                 → Heading 1 (page break before)
-## 1.1  Subtitle                  → Heading 2
-### Sub-section                   → Heading 3
+# PARTE I — Titolo          → Heading 1 (interruzione pagina prima)
+## 1.1  Sottotitolo          → Heading 2
+### Sotto-sezione            → Heading 3
 
-Regular paragraph text.
-
-- Bullet item one
-- Bullet item two
-
----                               → Horizontal rule / divider
-```
-
-### Note boxes
-
-```markdown
 > [!NOTE]
-> Blue info box — for design notes, rules clarifications.
+> Riquadro informativo blu.
 
 > [!WARNING]
-> Red warning box — for critical rules, breaking changes.
+> Riquadro avviso rosso.
 
-> [!IMPORTANT]
-> Same as WARNING visually.
-```
+| Col A | Col B |              → tabella DOCX con header colorato
+|-------|-------|
+| val 1 | val 2 |
 
-### Tables
-
-Standard Markdown tables become styled DOCX tables with a coloured header row:
-
-```markdown
-| Column A | Column B | Column C |
-|----------|----------|----------|
-| value 1  | value 2  | value 3  |
-```
-
-### Two-column key-value tables
-
-Wrap with `:::twocol` / `:::` for the compact label-value layout used in action cards and component lists:
-
-```markdown
 :::twocol
-| Field  | Value            |
-|--------|------------------|
-| Cost   | 1 action — 0 water |
-| Effect | Plant a peg      |
+| Campo | Valore |          → tabella compatta chiave-valore
+|-------|--------|
+| Costo | 1 azione |
 :::
-```
 
-### Inline formatting
-
-```markdown
-**bold text**
-*italic text*
-`monospace`
-{color:C05A20}coloured run{/color}
-{bold}bold run{/bold}
+**grassetto**  *corsivo*  `monospace`
+{color:C05A20}testo colorato{/color}
 ```
 
 ---
 
-## Adding a new language
+## Aggiungere una lingua
 
 1. `cp -r content/it content/de`
-2. Edit `content/de/meta.yml` (title, subtitle, etc.)
-3. Translate each `.md` file
-4. Add `de` to the `langs` logic in `.github/workflows/build-manual.yml`
-5. Add `de` entry to `LANG_DEFAULTS` in `build/styles.js`
+2. Modifica `content/de/meta.yml`
+3. Traduci ogni file `.md`
+4. Aggiungi `de` alla logica `langs` in `build-manual.yml`
+5. Aggiungi entry `de` in `LANG_DEFAULTS` di `build/styles.js`
 
 ---
 
-## License
+## Placeholder da compilare prima della spedizione
 
-Content © the author. Build tooling MIT.
+I seguenti campi in `content/it/meta.yml` e `content/en/meta.yml`  
+vanno sostituiti con i dati reali dell'autore:
+
+```yaml
+author: "[NOME COGNOME]"   ← sostituire con nome e cognome
+phone:  "[TEL]"            ← sostituire con numero di telefono
+email:  "[EMAIL]"          ← sostituire con indirizzo email
+```
+
+Anche `content/it/17-conformita.md` (e EN) contengono `[NOME][TEL][EMAIL]`  
+nella riga relativa ai contatti sulla scatola.
+
+---
+
+## Licenza
+
+Contenuto © l'autore. Build tooling MIT.
