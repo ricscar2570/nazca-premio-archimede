@@ -1,0 +1,236 @@
+name: Build TTS Mod
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tts/**'
+      - '.github/workflows/build-tts.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tts/**'
+  workflow_dispatch:
+    inputs:
+      board_image_url:
+        description: 'URL immagine plancia (opzionale, sovrascrive la variabile repo)'
+        required: false
+
+jobs:
+  build-tts:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Bundle Lua scripts → TTS JSON
+        env:
+          REPO_URL: https://raw.githubusercontent.com/${{ github.repository }}/main
+          BOARD_IMAGE_URL: ${{ inputs.board_image_url || vars.BOARD_IMAGE_URL || format('https://raw.githubusercontent.com/{0}/main/tts/template/board.png', github.repository) }}
+        run: |
+          mkdir -p output
+          echo "Board image URL: $BOARD_IMAGE_URL"
+          node tts/build/bundle.js --out output/
+
+      - name: Verify output
+        run: |
+          ls -lh output/
+          python3 -c "
+          import json, sys
+          with open('output/NAZCA_TTS_v8.json') as f:
+              data = json.load(f)
+          board = next((o for o in data['ObjectStates'] if o['GUID']=='aa0001'), None)
+          snap_count = len(board.get('SnapPoints', [])) if board else 0
+          script_len = len(data.get('LuaScript',''))
+          print(f'Objects: {len(data[\"ObjectStates\"])}')
+          print(f'Snap points: {snap_count} (expected 540)')
+          print(f'Lua script: {script_len} chars')
+          assert snap_count == 540, f'Wrong snap count: {snap_count}'
+          assert script_len > 1000, 'Lua script too short'
+          print('All checks passed.')
+          "
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NAZCA-TTS-${{ github.run_number }}
+          path: |
+            output/NAZCA_TTS_v8.json
+            output/NAZCA_GlobalScript.lua
+          retention-days: 30
+
+  release-tts:
+    needs: build-tts
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: NAZCA-TTS-${{ github.run_number }}
+          path: output/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: tts-${{ github.run_number }}
+          name: "NAZCA TTS v8 — Build ${{ github.run_number }}"
+          body: |
+            # NAZCA — Le linee che cercano l'acqua
+            **Game Bible v8.0 · Ramo v3.1 «Corde» · Build automatica**
+
+            Commit: `${{ github.sha }}`
+
+            ---
+
+            ## 📦 File inclusi
+
+            | File | Descrizione |
+            |------|-------------|
+            | `NAZCA_TTS_v8.json` | **Il mod completo** — caricalo direttamente in TTS |
+            | `NAZCA_GlobalScript.lua` | Codice sorgente Lua bundled (solo per debugging) |
+
+            ---
+
+            ## 🖥️ Installazione — passo per passo
+
+            ### Prerequisiti
+            - **Tabletop Simulator** installato via Steam (€ 19,99)
+            - Una partita salvata almeno una volta (crea la cartella `Saves/` automaticamente)
+
+            ### 1. Trovare la cartella Saves
+
+            | Sistema | Percorso |
+            |---------|---------|
+            | **Windows** | `C:\Users\[TuoNome]\Documents\My Games\Tabletop Simulator\Saves\` |
+            | **Mac** | `~/Library/Tabletop Simulator/Saves/` |
+            | **Linux** | `~/.local/share/Tabletop Simulator/Saves/` |
+
+            > 💡 Se la cartella non esiste: avvia TTS → crea una partita qualsiasi → salvala → riprova.
+
+            ### 2. Copiare il file JSON
+
+            Scarica `NAZCA_TTS_v8.json` da questa release e copialo nella cartella `Saves/`.
+
+            ### 3. Aggiungere l'immagine della plancia
+
+            Il JSON ha bisogno di un'immagine PNG della plancia ospitata online.
+            **Opzione rapida — generala con Python:**
+
+            ```python
+            # pip install Pillow
+            from PIL import Image, ImageDraw
+            img = Image.new('RGB', (2048, 2048), (196, 164, 106))
+            draw = ImageDraw.Draw(img)
+            for row in range(27):
+                for col in range(20):
+                    cx, cy = 64 + col * 101, 64 + row * 74
+                    draw.ellipse([cx-12,cy-12,cx+12,cy+12],
+                                 fill=(138,112,80), outline=(90,64,48), width=2)
+            img.save('board.png')
+            ```
+
+            Carica `board.png` su [Imgur](https://imgur.com) (drag & drop, nessun account necessario).
+            Copia l'URL diretto dell'immagine (es. `https://i.imgur.com/xxxxxxx.png`).
+
+            Apri `NAZCA_TTS_v8.json` con un editor di testo, cerca le due occorrenze di `"ImageURL": ""`
+            e sostituiscile entrambe con il tuo URL. Salva.
+
+            > 📌 Se hai già configurato `BOARD_IMAGE_URL` come variabile del repository GitHub,
+            > l'URL è già incorporato nel JSON e questo passo non è necessario.
+
+            ### 4. Caricare in TTS
+
+            1. Apri Tabletop Simulator
+            2. **Games → Save & Load**
+            3. Seleziona `NAZCA_TTS_v8` dall'elenco → **Load**
+
+            ---
+
+            ## 🎮 Setup della partita (comandi chat)
+
+            Una volta caricato il tavolo, ogni giocatore usa la chat di TTS per configurare il proprio clan.
+            Digita i comandi nella casella chat in basso a sinistra.
+
+            ### Seleziona il colore TTS corrispondente al tuo clan
+
+            | Colore TTS | Clan | Versante consigliato |
+            |-----------|------|---------------------|
+            | 🔴 **Red** | Ragno | Sud (`sud`) |
+            | 🔵 **Blue** | Orca | Sud (`sud`) |
+            | 🟢 **Green** | Colibrì | Nord (`nord`) |
+            | ⚪ **White** | Condor | Nord (`nord`) |
+
+            ### Comandi di setup (nell'ordine)
+
+            ```
+            !versante ragno sud        → Ragno sceglie versante Sud
+            !versante orca sud         → Orca sceglie versante Sud
+            !versante colibri nord     → Colibrì sceglie versante Nord
+            !versante condor nord      → Condor sceglie versante Nord
+            ```
+
+            ```
+            !geoglifo ragno 521 404 202 45 ...    → imposta i nodi del percorso segreto Ragno
+            !geoglifo orca  540 437 274 ...        → (sostituire con gli indici reali della carta)
+            !geoglifo colibri 1 45 110 ...
+            !geoglifo condor  20 77 199 ...
+            ```
+
+            > Gli indici nodo si leggono dalla carta geoglifo fisica (griglia 20×27, indice = riga×20+col+1).
+
+            ---
+
+            ## ⚡ Comandi durante la partita
+
+            | Comando | Quando usarlo |
+            |---------|---------------|
+            | `!campo 2` | Seleziona il campo N prima di irrigare/seminare/raccogliere |
+            | `!orca EW` o `!orca NS` | **Orca:** subito dopo aver piazzato un chiodino blu |
+            | `!spia ragno` | **Condor:** spia la carta del Ragno (3 secondi) |
+            | `!huarango H3` | Seleziona quale huarango abbattere prima di cliccare il pulsante |
+            | `!arte colibri` | Vota il Bonus Arte alla Rivelazione |
+
+            ### Pulsanti sul pannello UI (a destra della plancia)
+
+            | Pulsante | Azione |
+            |----------|--------|
+            | Puquio (1 azione) | Piazza puquio sulla sorgente raggiunta |
+            | Irriga Valle (0💧) | Irriga il campo selezionato con `!campo N` |
+            | Semina Mais/Fagioli/Zucca/Cotone | Semina sul campo selezionato |
+            | Raccogli | Raccoglie il raccolto maturo sul campo selezionato |
+            | Abbatti Huarango ★ | Abbatte l'huarango selezionato con `!huarango HN` |
+            | PASSA | Passa il turno |
+            | ★ RIVELAZIONE | Avvia la sequenza finale (solo dopo il Round 6) |
+            | Mobilità+ Colibrì | Sposta il chiodino (`lastHoveredNode → lastHoveredNodeDest`) |
+            | Spia Condor | Spia il clan selezionato con `!spia CLAN` |
+
+            ---
+
+            ## 🚨 Limitazioni note (prototipo)
+
+            - **L'immagine della plancia** deve essere configurata manualmente (vedi Passo 3)
+            - **Le carte geoglifo** non sono ancora collegate automaticamente ai percorsi — usa `!geoglifo` per impostare i percorsi manualmente a inizio partita
+            - **La cordicella** è rappresentata da Vector Lines disegnate automaticamente quando si piazza un chiodino — non è un oggetto fisico separato
+            - **I campi a valle** sono gestiti solo via stato Lua (nessuna tessera fisica fuori dalla plancia in questa versione)
+
+            ---
+
+            ## 🔄 Aggiornamenti
+
+            Questo file viene rigenerato automaticamente ad ogni push su `tts/**`.
+            Per ottenere l'ultima versione, scarica sempre dalla **sezione Releases** del repository.
+
+            Vedi la [Game Bible v8.0](../../releases) per le regole complete.
+          files: output/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
