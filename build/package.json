@@ -1,0 +1,19 @@
+{
+  "name": "nazca-gamebible-builder",
+  "version": "1.0.0",
+  "description": "Build pipeline for NAZCA Game Bible — Markdown → DOCX/PDF",
+  "main": "index.js",
+  "scripts": {
+    "build": "node index.js",
+    "build:it": "node index.js --lang it --out ../output/",
+    "build:en": "node index.js --lang en --out ../output/",
+    "build:all": "node index.js --lang it --out ../output/ && node index.js --lang en --out ../output/"
+  },
+  "dependencies": {
+    "docx": "^8.5.0",
+    "js-yaml": "^4.1.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

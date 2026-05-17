@@ -1,0 +1,106 @@
+name: Build Game Bible
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'content/**'
+      - 'build/**'
+      - '.github/workflows/build-manual.yml'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      language:
+        description: 'Language (it / en / all)'
+        required: false
+        default: 'all'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: build/package-lock.json
+
+      - name: Install build dependencies
+        working-directory: build
+        run: npm ci
+
+      - name: Install LibreOffice
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y libreoffice --no-install-recommends
+
+      - name: Determine languages to build
+        id: langs
+        run: |
+          INPUT="${{ github.event.inputs.language }}"
+          if [ "$INPUT" = "it" ]; then
+            echo "langs=it" >> $GITHUB_OUTPUT
+          elif [ "$INPUT" = "en" ]; then
+            echo "langs=en" >> $GITHUB_OUTPUT
+          else
+            echo "langs=it en" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build DOCX
+        run: |
+          mkdir -p output
+          for lang in ${{ steps.langs.outputs.langs }}; do
+            echo "=== Building $lang ==="
+            node build/index.js --lang $lang --out output/
+          done
+
+      - name: Convert DOCX to PDF
+        run: |
+          for f in output/*.docx; do
+            echo "Converting $f..."
+            libreoffice --headless --convert-to pdf --outdir output/ "$f"
+          done
+          ls -lh output/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-bible-${{ github.run_number }}
+          path: output/
+          retention-days: 30
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: game-bible-${{ github.run_number }}
+          path: output/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "Game Bible — Build ${{ github.run_number }}"
+          body: |
+            Automated build from commit `${{ github.sha }}`.
+
+            **Files included:**
+            - `NAZCA_GameBible_it.pdf` — Regolamento italiano
+            - `NAZCA_GameBible_en.pdf` — English rulebook (stub)
+            - `.docx` sources for both languages
+          files: output/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
